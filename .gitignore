@@ -1,0 +1,16 @@
+# Downloaded KJV source (66 books) — regenerable, 5 MB. Keep out of git; the built puzzles.json
+# is what ships.
+data/kjv/
+
+# Build artifact from data/kjv. Regenerate with data/fetch_kjv.py + the build step.
+data/corpus.json
+
+# Local server / tooling noise
+server.log
+*.log
+__pycache__/
+.DS_Store
+
+# Cloudflare
+.wrangler/
+node_modules/

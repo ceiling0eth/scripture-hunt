@@ -1,0 +1,11 @@
+# Cloudflare Pages headers. Everything is static — no backend, no functions.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+
+/data/puzzles.json
+  Cache-Control: public, max-age=3600
+
+/data/pool_final.json
+  Cache-Control: public, max-age=86400

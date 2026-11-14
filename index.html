@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scripture Hunt — find the words hidden in the verse</title>
+<style>
+  :root{
+    --bg:#12100e; --panel:#1c1917; --ink:#f5f1e8; --muted:#a8a29e;
+    --gold:#d4a94e; --gold-dim:#8a6d33; --found:#3f6212; --found-ink:#d9f99d;
+    --miss:#7f1d1d; --line:#3f3a35;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    display:flex; align-items:center; justify-content:center; min-height:100vh; padding:16px;
+  }
+  .wrap{width:100%; max-width:760px}
+  header{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; gap:12px}
+  h1{margin:0; font-size:19px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold); font-weight:600}
+  .meta{font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px}
+  .ref{font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--gold-dim); margin-bottom:10px}
+  #verse{
+    font-size:19px; line-height:1.85; letter-spacing:.01em;
+    -webkit-user-select:none; user-select:none; cursor:default;
+  }
+  #verse .w{border-radius:4px; transition:background .12s, color .12s; padding:1px 0}
+  #verse .w.pick{background:var(--gold); color:#12100e}
+  #verse .w.found{background:var(--found); color:var(--found-ink); text-decoration:line-through; text-decoration-thickness:1px}
+  #verse .w.found.pick{background:var(--gold); color:#12100e}
+  #verse .w.miss{background:var(--miss); color:#fee2e2}
+  .bar{display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap}
+  .prog{flex:1; min-width:120px; height:7px; background:#2a2521; border-radius:99px; overflow:hidden}
+  .prog i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--gold-dim),var(--gold)); transition:width .25s}
+  .count{font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums}
+  button{
+    font:inherit; font-size:14px; background:transparent; color:var(--ink);
+    border:1px solid var(--line); border-radius:7px; padding:7px 14px; cursor:pointer;
+    transition:border-color .12s, color .12s, background .12s;
+  }
+  button:hover:not(:disabled){border-color:var(--gold-dim); color:var(--gold)}
+  button:disabled{opacity:.35; cursor:not-allowed}
+  button.primary{background:var(--gold); color:#12100e; border-color:var(--gold); font-weight:600}
+  button.primary:hover:not(:disabled){background:#e5bb5f; color:#12100e}
+  #toast{
+    min-height:22px; margin-top:12px; font-size:14px; color:var(--muted);
+    font-variant-numeric:tabular-nums;
+  }
+  #toast.good{color:var(--found-ink)} #toast.bad{color:#fca5a5}
+  .hud{display:flex; gap:8px; align-items:center}
+  dialog{
+    border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--ink);
+    max-width:420px; padding:24px; font:inherit; text-align:center;
+  }
+  dialog::backdrop{background:rgba(0,0,0,.7)}
+  dialog h2{margin:0 0 8px; color:var(--gold); font-size:20px; letter-spacing:.04em}
+  dialog p{margin:6px 0; color:var(--muted); font-size:14px; line-height:1.6}
+  dialog .score{font-size:34px; color:var(--ink); margin:14px 0; font-variant-numeric:tabular-nums}
+  dialog .btns{display:flex; gap:10px; justify-content:center; margin-top:18px; flex-wrap:wrap}
+  @media (max-width:520px){ #verse{font-size:17px; line-height:1.95} h1{font-size:16px} }
+
+  /* paywall */
+  .pill{font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:99px;
+        padding:3px 10px; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .pill.paid{color:var(--gold); border-color:var(--gold-dim)}
+  #paywall{border:1px solid var(--gold-dim); border-radius:14px; background:var(--panel); color:var(--ink);
+           max-width:460px; padding:28px; font:inherit; text-align:center}
+  #paywall::backdrop{background:rgba(0,0,0,.78)}
+  #paywall h2{margin:0 0 6px; color:var(--gold); font-size:22px; letter-spacing:.03em}
+  #paywall .sub{margin:0 0 20px; color:var(--muted); font-size:14px}
+  .tier{border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:10px 0; text-align:left}
+  .tier.best{border-color:var(--gold); background:#231d13}
+  .tier .t{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px}
+  .tier .t b{font-size:16px}
+  .tier .t span{color:var(--gold); font-size:17px; font-variant-numeric:tabular-nums}
+  .tier .d{color:var(--muted); font-size:13px; line-height:1.55}
+  .tag{display:inline-block; font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+       background:var(--gold); color:#12100e; border-radius:4px; padding:2px 6px; margin-left:6px;
+       font-weight:700; vertical-align:1px}
+  #paywall .fine{margin-top:16px; font-size:11px; color:#6b6360; line-height:1.6}
+  .link{background:none; border:none; color:var(--muted); text-decoration:underline; cursor:pointer;
+        font:inherit; font-size:13px; padding:6px}
+  /* ad interstitial */
+  #ad{border:1px solid var(--line); border-radius:14px; background:var(--panel); color:var(--ink);
+      max-width:400px; padding:26px; font:inherit; text-align:center}
+  #ad::backdrop{background:rgba(0,0,0,.85)}
+  #ad .adbox{background:#0d0c0b; border:1px solid var(--line); border-radius:8px; padding:34px 16px;
+             margin:16px 0; color:var(--muted); font-size:13px; letter-spacing:.16em; text-transform:uppercase}
+  #adTimer{font-size:32px; color:var(--gold); font-variant-numeric:tabular-nums; margin:10px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Scripture Hunt</h1>
+    <div class="hud">
+      <span class="pill" id="playsLeft">3 free today</span>
+      <span class="meta" id="clock">0:00</span>
+      <button id="hintBtn" title="Reveal one letter of an unfound word">Hint</button>
+      <button id="newBtn">New</button>
+    </div>
+  </header>
+
+  <div class="panel">
+    <div class="ref" id="ref">&nbsp;</div>
+    <div id="verse">Loading…</div>
+    <div class="bar">
+      <div class="prog"><i id="progFill"></i></div>
+      <span class="count" id="count">0 / 0</span>
+    </div>
+    <div id="toast"></div>
+  </div>
+</div>
+
+<dialog id="done">
+  <h2 id="doneTitle">Well done</h2>
+  <p id="doneRef"></p>
+  <div class="score" id="doneTime"></div>
+  <p id="doneHints"></p>
+  <div class="btns">
+    <button class="primary" id="againBtn">Next verse</button>
+  </div>
+</dialog>
+
+<dialog id="paywall">
+  <h2>Out of free verses</h2>
+  <p class="sub">You've played <b id="pwCount">3</b> today. Come back tomorrow, watch a short ad, or go unlimited.</p>
+
+  <div class="tier best">
+    <div class="t"><b>Unlimited <span class="tag">Best</span></b><span>$5.99</span></div>
+    <div class="d">Every verse, forever. No ads, no timer, no daily limit.</div>
+    <div class="btns"><button class="primary" id="buyBtn" data-buy="unlimited">Unlock forever — $5.99</button></div>
+  </div>
+
+  <div class="tier">
+    <div class="t"><b>Watch an ad</b><span>Free</span></div>
+    <div class="d">30 seconds, gives you 2 more verses today.</div>
+    <div class="btns"><button id="adBtn">Watch ad (+2 verses)</button></div>
+  </div>
+
+  <div class="tier">
+    <div class="t"><b>Hint pack</b><span>$1.99</span></div>
+    <div class="d">10 hints. Reveals one word per hint, usable any time.</div>
+    <div class="btns"><button id="hintPackBtn" data-buy="hints">Buy 10 hints — $1.99</button></div>
+  </div>
+
+  <button class="link" id="pwClose">Maybe later</button>
+  <p class="fine">Demo build — buttons simulate purchase and store nothing. No payment is taken.</p>
+</dialog>
+
+<dialog id="ad">
+  <p style="margin:0;color:var(--muted);font-size:13px;letter-spacing:.14em;text-transform:uppercase">Advertisement</p>
+  <div class="adbox">your ad here</div>
+  <div id="adTimer">5</div>
+  <p style="color:var(--muted);font-size:12px;margin:4px 0 0">Reward unlocks when the timer ends.</p>
+</dialog>
+
+<script>
+/* Scripture Hunt — find the hidden words inside a KJV verse.
+   Data: data/puzzles.json, generated from the public-domain King James Version. */
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const verseEl = $("verse"), refEl = $("ref"), countEl = $("count"), progEl = $("progFill");
+  const toastEl = $("toast"), clockEl = $("clock"), doneDlg = $("done");
+  const paywallEl = $("paywall"), adEl = $("ad");
+
+  let puzzles = [], puzzle = null;
+  let tokens = [];         // [{text, word|null, el}] — word = uppercase A-Z only, null for punctuation
+  let remaining = 0, found = 0, hintsUsed = 0, wrongGuesses = 0, startedAt = 0, timerId = 0, finished = false;
+
+  /* ---------- entitlements ----------
+     Demo build: state lives in localStorage only. A real build moves this to the App Store receipt
+     and a server-side entitlement check; nothing here is a security boundary. */
+  const FREE_PER_DAY = 3;
+  const AD_REWARD = 2;
+  const AD_SECONDS = 5;                 // real build: 15-30s rewarded video
+  const FREE_HINTS = 3;                 // starter hints before the hint pack is worth buying
+  const STORE_KEY = "scripturehunt.v1";
+
+  const defaultState = () => ({
+    day: today(),
+    playedToday: 0,
+    bonus: 0,            // extra plays earned by watching ads
+    unlimited: false,
+    hints: FREE_HINTS,
+  });
+
+  function today() {
+    const d = new Date();
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  }
+
+  function loadState() {
+    let s;
+    try { s = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch { s = null; }
+    if (!s || typeof s !== "object") s = defaultState();
+    // reset the daily allowance when the calendar day changes
+    if (s.day !== today()) { s.day = today(); s.playedToday = 0; s.bonus = 0; }
+    for (const [k, v] of Object.entries(defaultState())) if (s[k] === undefined) s[k] = v;
+    return s;
+  }
+
+  function saveState() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { /* private mode */ }
+  }
+
+  let state = loadState();
+
+  const playsLeft = () => state.unlimited ? Infinity : Math.max(0, FREE_PER_DAY + state.bonus - state.playedToday);
+  const canPlay = () => playsLeft() > 0;
+
+  function renderWallet() {
+    const el = $("playsLeft");
+    if (state.unlimited) {
+      el.textContent = "Unlimited";
+      el.className = "pill paid";
+    } else {
+      const n = playsLeft();
+      el.textContent = `${n} free${n === 1 ? "" : "s"} today`;
+      el.className = "pill";
+    }
+  }
+
+  // Gate every path that hands the player a new verse.
+  function spendPlay() {
+    if (state.unlimited) return true;
+    if (playsLeft() <= 0) return false;
+    state.playedToday++;
+    saveState();
+    renderWallet();
+    return true;
+  }
+
+  function requestPuzzle() {
+    if (!spendPlay()) { openPaywall(); return false; }
+    nextPuzzle();
+    return true;
+  }
+
+  function openPaywall() {
+    $("pwCount").textContent = FREE_PER_DAY + state.bonus;
+    if (!paywallEl.open) paywallEl.showModal();
+  }
+
+  /* ---------- data ---------- */
+  async function loadPuzzles() {
+    const r = await fetch("data/puzzles.json");
+    if (!r.ok) throw new Error("could not load data/puzzles.json");
+    puzzles = await r.json();
+    if (!puzzles.length) throw new Error("puzzle list is empty");
+  }
+
+  /* ---------- rendering ---------- */
+  // Split a verse into per-word tokens. `word` is the uppercase hidden word, or null for an ordinary
+  // word. Punctuation/whitespace between words becomes its own token with `word === undefined`.
+  function buildTokens(text, words) {
+    const set = new Set(words);
+    const out = [];
+    const re = /([A-Za-z]+(?:['’][A-Za-z]+)?)/g;
+    let last = 0, m;
+    while ((m = re.exec(text))) {
+      if (m.index > last) out.push({ text: text.slice(last, m.index), word: undefined });
+      const up = m[1].toUpperCase().replace(/’/g, "'");
+      out.push({ text: m[1], word: set.has(up) ? up : null });
+      last = m.index + m[1].length;
+    }
+    if (last < text.length) out.push({ text: text.slice(last), word: undefined });
+    return out;
+  }
+
+  function renderPuzzle(p) {
+    puzzle = p;
+    finished = false; hintsUsed = 0; found = 0; wrongGuesses = 0;
+    remaining = p.words.length;
+    tokens = buildTokens(p.text, p.words);
+
+    refEl.textContent = p.ref;
+    verseEl.innerHTML = "";
+    const frag = document.createDocumentFragment();
+    for (const t of tokens) {
+      // Every word is clickable, hidden or not: a player must not be able to tell a hidden word from
+      // an ordinary one by looking, or there is nothing to solve.
+      if (t.word !== undefined) {
+        const span = document.createElement("span");
+        span.className = "w";
+        span.textContent = t.text;
+        if (t.word) span.dataset.word = t.word;
+        else span.dataset.plain = "1";
+        t.el = span;
+        frag.appendChild(span);
+      } else {
+        frag.appendChild(document.createTextNode(t.text));
+      }
+    }
+    verseEl.appendChild(frag);
+    clearPick();
+    updateProgress();
+    setToast("");
+    startedAt = Date.now();
+    clearInterval(timerId);
+    timerId = setInterval(tick, 250);
+    tick();
+  }
+
+  function updateProgress() {
+    countEl.textContent = `${found} / ${puzzle.words.length}`;
+    progEl.style.width = `${(found / puzzle.words.length) * 100}%`;
+  }
+
+  function tick() {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    clockEl.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+
+  function setToast(msg, kind) {
+    toastEl.textContent = msg;
+    toastEl.className = kind || "";
+  }
+
+  /* ---------- selection ---------- */
+  let selStart = -1, selEnd = -1;
+
+  function wordIndexes() {
+    const idx = [];
+    tokens.forEach((t, i) => { if (t.word !== undefined) idx.push(i); });
+    return idx;
+  }
+
+  function clearPick() {
+    for (const t of tokens) if (t.el) t.el.classList.remove("pick");
+    selStart = selEnd = -1;
+  }
+
+  function paintPick() {
+    for (const t of tokens) if (t.el) t.el.classList.remove("pick");
+    if (selStart < 0) return;
+    const a = Math.min(selStart, selEnd), b = Math.max(selStart, selEnd);
+    for (let i = a; i <= b; i++) {
+      const t = tokens[i];
+      if (t && t.el) t.el.classList.add("pick");
+    }
+  }
+
+  // Map a selection between two *word* tokens to the [start,end] it covers, or null if it is not
+  // exactly one hidden word. Returns {start, end, word} where word is the text the player selected.
+  function resolveSelection() {
+    const a = Math.min(selStart, selEnd), b = Math.max(selStart, selEnd);
+    let text = "", firstWord = -1, lastWord = -1, wordCount = 0;
+    for (let i = a; i <= b; i++) {
+      const t = tokens[i];
+      if (!t) return null;
+      if (t.el) {
+        if (firstWord < 0) firstWord = i;
+        lastWord = i;
+        wordCount++;
+        text += t.text.toUpperCase();
+      }
+    }
+    if (wordCount !== 1) return null;          // a verse word, not a phrase
+    const w = tokens[firstWord].word;
+    if (w === null || w === undefined) return { firstWord, lastWord, word: null };  // a plain word: a miss
+    if (w !== text.replace(/’/g, "'")) return { firstWord, lastWord, word: null };
+    return { firstWord, lastWord, word: w };
+  }
+
+  function onWordDown(i) {
+    if (finished) return;
+    selStart = selEnd = i;
+    paintPick();
+  }
+
+  function onWordEnter(i) {
+    if (selStart < 0 || finished) return;
+    selEnd = i;
+    paintPick();
+  }
+
+  function tryCommit() {
+    if (finished || selStart < 0) return;
+    const hit = resolveSelection();
+    if (!hit) {
+      // Only worth a nudge when the player actually swept across a span that can never match.
+      if (Math.abs(selEnd - selStart) > 0) setToast("One word at a time.", "bad");
+      clearPick();
+      return;
+    }
+    if (hit.word === null) { wrongGuess(hit); return; }   // a real word, just not one of the hidden ones
+    commitWord(hit);
+  }
+
+  // A wrong guess must be visible. Without this the player gets zero signal and is guessing blind.
+  function wrongGuess(hit) {
+    const el = tokens[hit.firstWord].el;
+    el.classList.add("miss");
+    setTimeout(() => el.classList.remove("miss"), 420);
+    wrongGuesses++;
+    setToast(`“${el.textContent}” isn’t one of them.`, "bad");
+    clearPick();
+  }
+
+  function commitWord(hit) {
+    const t = tokens[hit.firstWord];
+    if (t.el.classList.contains("found")) { clearPick(); return; }   // already found
+    if (alreadyFound(hit.word)) { setToast(`“${hit.word}” already found.`); clearPick(); return; }
+
+    for (let i = hit.firstWord; i <= hit.lastWord; i++) {
+      const tk = tokens[i];
+      if (tk.el) tk.el.classList.add("found");
+    }
+    found++;
+    updateProgress();
+    clearPick();
+    setToast(`“${hit.word}” — found.`, "good");
+
+    if (found === puzzle.words.length) finish();
+  }
+
+  // The same word can appear twice in a verse; finding one occurrence counts it.
+  function alreadyFound(word) {
+    if (!puzzle) return false;
+    for (const t of tokens) {
+      if (t.word === word && t.el && t.el.classList.contains("found")) return true;
+    }
+    return false;
+  }
+
+  /* ---------- pointer + keyboard input ---------- */
+  // A simple drag on touch devices and click-drag with the mouse both work by tracking the
+  // word span under the pointer.
+  let dragging = false;
+
+  function wordAt(target) {
+    const el = target && target.closest ? target.closest(".w") : null;
+    if (!el || !verseEl.contains(el)) return -1;
+    return tokens.findIndex((t) => t.el === el);
+  }
+
+  verseEl.addEventListener("pointerdown", (e) => {
+    const i = wordAt(e.target);
+    if (i < 0) return;
+    dragging = true;
+    verseEl.setPointerCapture?.(e.pointerId);
+    onWordDown(i);
+    e.preventDefault();
+  });
+
+  verseEl.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const i = wordAt(el);
+    if (i >= 0) onWordEnter(i);
+  });
+
+  verseEl.addEventListener("pointerup", (e) => {
+    if (!dragging) return;
+    dragging = false;
+    verseEl.releasePointerCapture?.(e.pointerId);
+    // If nothing was committed, it was a single tap on a hidden word -> treat as a full-word pick.
+    tryCommit();
+  });
+
+  verseEl.addEventListener("pointercancel", () => { dragging = false; clearPick(); });
+
+  /* ---------- hints ---------- */
+  function useHint() {
+    if (finished || !puzzle) return;
+    if (state.hints <= 0) { openPaywall(); return; }
+    // Reveal the highest-frequency unfound word: it is the least frustrating one to miss.
+    const left = puzzle.words.filter((w) => !alreadyFound(w));
+    if (!left.length) return;
+    const word = left[0];
+    const idx = tokens.findIndex((t) => t.word === word);
+    if (idx < 0) return;
+    state.hints--;
+    saveState();
+    hintsUsed++;
+    found++;
+    updateProgress();
+    for (const t of tokens) if (t.word === word && t.el) t.el.classList.add("found");
+    setToast(`Hint used — “${word}” revealed. ${state.hints} left.`, "good");
+    if (found === puzzle.words.length) finish();
+  }
+
+  /* ---------- purchase + rewarded ad ---------- */
+  function buy(kind) {
+    let msg;
+    if (kind === "unlimited") {
+      state.unlimited = true;
+      msg = "Unlimited unlocked. Every verse, no ads.";
+    } else if (kind === "hints") {
+      state.hints += 10;
+      msg = "10 hints added.";
+    }
+    saveState();
+    renderWallet();
+    if (paywallEl.open) paywallEl.close();
+    if (kind === "unlimited") nextPuzzle();   // renderPuzzle clears the toast, so set it after
+    if (msg) setToast(msg, "good");
+  }
+
+  let adTick = 0;
+  function watchAd() {
+    if (paywallEl.open) paywallEl.close();
+    let left = AD_SECONDS;
+    $("adTimer").textContent = String(left);
+    adEl.showModal();
+    clearInterval(adTick);
+    adTick = setInterval(() => {
+      left--;
+      $("adTimer").textContent = String(Math.max(0, left));
+      if (left <= 0) {
+        clearInterval(adTick);
+        adEl.close();
+        state.bonus += AD_REWARD;
+        saveState();
+        renderWallet();
+        nextPuzzle();                                  // renderPuzzle clears the toast, so set it after
+        setToast(`+${AD_REWARD} verses unlocked.`, "good");
+      }
+    }, 1000);
+  }
+
+  /* ---------- finish / new ---------- */
+  function finish() {
+    finished = true;
+    clearInterval(timerId);
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    $("doneRef").textContent = puzzle.ref;
+    $("doneTitle").textContent = hintsUsed === 0 ? "Flawless" : "Complete";
+    $("doneTime").textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    $("doneHints").textContent = hintsUsed === 0
+      ? "No hints used."
+      : `${hintsUsed} hint${hintsUsed > 1 ? "s" : ""} used.`;
+    doneDlg.showModal();
+  }
+
+  // Returns false when the player is out of free verses (the caller shows the paywall).
+  function nextPuzzle() {
+    const p = puzzles[Math.floor(Math.random() * puzzles.length)];
+    renderPuzzle(p);
+    return true;
+  }
+
+  /* ---------- wire up ---------- */
+  $("hintBtn").addEventListener("click", useHint);
+  $("newBtn").addEventListener("click", () => { if (!playBlocked()) requestPuzzle(); });
+  $("againBtn").addEventListener("click", () => {
+    doneDlg.close();
+    if (!playBlocked()) requestPuzzle();
+  });
+  doneDlg.addEventListener("cancel", (e) => { e.preventDefault(); });
+  paywallEl.addEventListener("cancel", (e) => { e.preventDefault(); paywallEl.close(); });
+  adEl.addEventListener("cancel", (e) => e.preventDefault());
+
+  $("buyBtn").addEventListener("click", () => buy("unlimited"));
+  $("hintPackBtn").addEventListener("click", () => buy("hints"));
+  $("adBtn").addEventListener("click", watchAd);
+  $("pwClose").addEventListener("click", () => paywallEl.close());
+
+  function playBlocked() {
+    if (canPlay()) return false;
+    openPaywall();
+    return true;
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (doneDlg.open || paywallEl.open || adEl.open) return;
+    if (e.key === "h" || e.key === "H") useHint();
+    if (e.key === "n" || e.key === "N") { if (!playBlocked()) requestPuzzle(); }
+    if (e.key === "Escape") clearPick();
+  });
+
+  loadPuzzles()
+    .then(() => {
+      renderWallet();
+      // Opening the app is a free look, not a spent play: the first verse is granted by the daily
+      // allowance, but a returning player with 0 left should land on the paywall immediately.
+      if (!spendPlay()) { openPaywall(); return; }
+      nextPuzzle();
+    })
+    .catch((err) => {
+      refEl.textContent = "Error";
+      verseEl.textContent = `${err.message}. Serve this folder over HTTP (python3 -m http.server) — opening the file directly will not load the puzzle data.`;
+    });
+})();
+</script>
+</body>
+</html>
