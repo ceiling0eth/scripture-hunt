@@ -18,19 +18,46 @@ Opening `index.html` directly with `file://` will not work (the browser blocks t
 Every word in the verse is clickable. A wrong word flashes red and tells you it isn't one of them;
 only single words count, so sweeping across a phrase is rejected.
 
-## Monetization (demo build)
-
-The paywall is real UI with a fake till — buttons set state, no payment is taken and nothing is
-stored server-side. State lives in `localStorage` under `scripturehunt.v1`.
+## Monetization
 
 | Tier | Price | What it does |
 |---|---|---|
 | Free | — | 3 verses/day, resets at local midnight, 3 starter hints |
-| Rewarded ad | free | 30s (demo: 5s), grants +2 verses for the day |
-| Unlimited | **$5.99 once** | No daily limit, no ads, no timer — the primary offer |
-| Hint pack | $1.99 | 10 hints, consumable |
+| Rewarded ad | free | 30s (demo: 5s), grants +2 verses for the day — **simulated** |
+| Unlimited | **$5.99 once** | No daily limit, no ads, no timer — **real Stripe Checkout** |
+| Hint pack | $1.99 | 10 hints, consumable — **simulated**, no link wired |
 
-Why this shape, from measured competitor storefronts (see the research note below):
+State lives in `localStorage` under `scripturehunt.v1`.
+
+### How the Stripe purchase works
+
+`STRIPE.unlimited` in `index.html` points at a Stripe Payment Link. Clicking Unlock hands the
+browser to Stripe; on success Stripe redirects to `https://scripture-hunt.pages.dev/?paid=1`,
+which sets `unlimited = true` and then strips the query with `history.replaceState` so a reload
+does not re-trigger and the URL stays shareable.
+
+**This is not a payment system.** A redirect is not proof of payment: anyone can open `/?paid=1`
+and unlock for free. That is acceptable for a demo on a link you hand out yourself, and
+unacceptable for money you intend to keep. To make it real:
+
+1. Add a `checkout.session.completed` webhook (needs a backend or a Cloudflare Worker).
+2. Mint a signed entitlement token (or store the purchase keyed to an account/email).
+3. Have the client ask the server before unlocking — never trust the query string.
+
+Client-side unlocking is deliberately left in place so the flow can be demoed without a backend;
+the code that must change is one function, `consumePaymentReturn()`.
+
+## PWA
+
+Installable on iOS and Android: `manifest.json` with maskable icons, a service worker (`sw.js`)
+that precaches the shell plus `data/puzzles.json` so the game plays offline, iOS
+`apple-mobile-web-app-*` meta tags, and safe-area padding so a standalone launch on a notched
+phone does not put the verse under the home indicator.
+
+The service worker is best-effort: registration failure (private mode, old Safari) must never
+break the game.
+
+### Why this price shape, from measured competitor storefronts
 
 - Every **game** in this category sells one-time unlocks and coin/hint packs, not subscriptions:
   `Bible Word Search` (97K ratings) — `No Ads Forever $5.99` + coins `$0.99-11.99`;
