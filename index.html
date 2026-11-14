@@ -2,8 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Scripture Hunt — find the words hidden in the verse</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#12100e">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Scripture Hunt">
+<meta name="description" content="Find the words hidden inside a King James verse.">
 <style>
   :root{
     --bg:#12100e; --panel:#1c1917; --ink:#f5f1e8; --muted:#a8a29e;
@@ -15,6 +26,12 @@
     margin:0; background:var(--bg); color:var(--ink);
     font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
     display:flex; align-items:center; justify-content:center; min-height:100vh; padding:16px;
+    /* standalone PWA on a notched iPhone: keep content out of the home indicator / notch */
+    padding-top:calc(16px + env(safe-area-inset-top));
+    padding-bottom:calc(16px + env(safe-area-inset-bottom));
+    padding-left:calc(16px + env(safe-area-inset-left));
+    padding-right:calc(16px + env(safe-area-inset-right));
+    -webkit-tap-highlight-color:transparent;
   }
   .wrap{width:100%; max-width:760px}
   header{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px; gap:12px}
@@ -147,7 +164,7 @@
   </div>
 
   <button class="link" id="pwClose">Maybe later</button>
-  <p class="fine">Demo build — buttons simulate purchase and store nothing. No payment is taken.</p>
+  <p class="fine">Card payment handled by Stripe. Demo build: the hint pack and ad are simulated.</p>
 </dialog>
 
 <dialog id="ad">
@@ -180,6 +197,25 @@
   const AD_SECONDS = 5;                 // real build: 15-30s rewarded video
   const FREE_HINTS = 3;                 // starter hints before the hint pack is worth buying
   const STORE_KEY = "scripturehunt.v1";
+
+  // Stripe Payment Links. Set these to the live links; empty means "not configured".
+  // IMPORTANT: a Payment Link redirect is NOT proof of payment — anyone can open the success
+  // URL directly. This unlocks locally, which is honest for a demo but not for real money.
+  // For real sales, verify server-side (webhook -> signed entitlement) and gate on that.
+  const STRIPE = {
+    unlimited: "https://buy.stripe.com/00w00iaCBe1acCQdOB9IQ03",
+  };
+
+  // A returning buyer lands here with ?paid=1 after Stripe redirects back.
+  function consumePaymentReturn() {
+    const params = new URLSearchParams(location.search);
+    if (params.get("paid") !== "1") return false;
+    state.unlimited = true;
+    saveState();
+    // Strip the query so a reload does not re-trigger and so the URL stays shareable.
+    history.replaceState(null, "", location.pathname);
+    return true;
+  }
 
   const defaultState = () => ({
     day: today(),
@@ -487,19 +523,21 @@
 
   /* ---------- purchase + rewarded ad ---------- */
   function buy(kind) {
-    let msg;
     if (kind === "unlimited") {
-      state.unlimited = true;
-      msg = "Unlimited unlocked. Every verse, no ads.";
-    } else if (kind === "hints") {
-      state.hints += 10;
-      msg = "10 hints added.";
+      const link = STRIPE.unlimited;
+      if (!link) { setToast("Checkout is not configured yet.", "bad"); return; }
+      // Hand off to Stripe Checkout. It redirects back to /?paid=1 when the payment succeeds.
+      location.href = link;
+      return;
     }
-    saveState();
-    renderWallet();
-    if (paywallEl.open) paywallEl.close();
-    if (kind === "unlimited") nextPuzzle();   // renderPuzzle clears the toast, so set it after
-    if (msg) setToast(msg, "good");
+    if (kind === "hints") {
+      // No Payment Link wired up for the hint pack yet — keep it a local grant rather than
+      // pretending a purchase happened.
+      state.hints += 10;
+      saveState();
+      if (paywallEl.open) paywallEl.close();
+      setToast("10 hints added.", "good");
+    }
   }
 
   let adTick = 0;
@@ -576,7 +614,13 @@
 
   loadPuzzles()
     .then(() => {
+      const justPaid = consumePaymentReturn();
       renderWallet();
+      if (justPaid) {
+        nextPuzzle();
+        setToast("Unlimited unlocked. Thank you.", "good");
+        return;
+      }
       // Opening the app is a free look, not a spent play: the first verse is granted by the daily
       // allowance, but a returning player with 0 left should land on the paywall immediately.
       if (!spendPlay()) { openPaywall(); return; }
@@ -586,6 +630,15 @@
       refEl.textContent = "Error";
       verseEl.textContent = `${err.message}. Serve this folder over HTTP (python3 -m http.server) — opening the file directly will not load the puzzle data.`;
     });
+
+  /* ---------- PWA ---------- */
+  // Offline play + add-to-home-screen. Registration is best-effort: the game must work
+  // even where service workers are unavailable (private mode, file://, old Safari).
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => { /* offline play is a bonus, not a requirement */ });
+    });
+  }
 })();
 </script>
 </body>
