@@ -190,31 +190,68 @@
   let remaining = 0, found = 0, hintsUsed = 0, wrongGuesses = 0, startedAt = 0, timerId = 0, finished = false;
 
   /* ---------- entitlements ----------
-     Demo build: state lives in localStorage only. A real build moves this to the App Store receipt
-     and a server-side entitlement check; nothing here is a security boundary. */
+     Purchases are verified server-side: Stripe's webhook records the ref it was paid for, and the
+     client asks /api/entitlement before unlocking. Locally cached state only mirrors the server. */
   const FREE_PER_DAY = 3;
   const AD_REWARD = 2;
   const AD_SECONDS = 5;                 // real build: 15-30s rewarded video
   const FREE_HINTS = 3;                 // starter hints before the hint pack is worth buying
   const STORE_KEY = "scripturehunt.v1";
 
-  // Stripe Payment Links. Set these to the live links; empty means "not configured".
-  // IMPORTANT: a Payment Link redirect is NOT proof of payment — anyone can open the success
-  // URL directly. This unlocks locally, which is honest for a demo but not for real money.
-  // For real sales, verify server-side (webhook -> signed entitlement) and gate on that.
-  const STRIPE = {
-    unlimited: "https://buy.stripe.com/00w00iaCBe1acCQdOB9IQ03",
-  };
+  // Stripe Payment Link for the unlimited tier.
+  const STRIPE_UNLIMITED = "https://buy.stripe.com/00w00iaCBe1acCQdOB9IQ03";
 
-  // A returning buyer lands here with ?paid=1 after Stripe redirects back.
-  function consumePaymentReturn() {
-    const params = new URLSearchParams(location.search);
-    if (params.get("paid") !== "1") return false;
-    state.unlimited = true;
+  // An opaque token tying a browser to a payment. Stripe echoes it back as client_reference_id,
+  // the webhook records it, and /api/entitlement answers for it. A hand-edited URL unlocks
+  // nothing because the server has no record for a ref the attacker invented.
+  function buyerRef() {
+    let r = state.buyerRef;
+    if (r) return r;
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    r = [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+    state.buyerRef = r;
     saveState();
-    // Strip the query so a reload does not re-trigger and so the URL stays shareable.
-    history.replaceState(null, "", location.pathname);
-    return true;
+    return r;
+  }
+
+  function checkoutUrl() {
+    // Stripe Payment Links accept client_reference_id as a query parameter.
+    const u = new URL(STRIPE_UNLIMITED);
+    u.searchParams.set("client_reference_id", buyerRef());
+    return u.toString();
+  }
+
+  // Ask the server whether this browser has paid. Returns true only on a positive answer.
+  async function refreshEntitlement() {
+    try {
+      const res = await fetch(`/api/entitlement?ref=${encodeURIComponent(buyerRef())}`, { cache: "no-store" });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data.unlimited === true) {
+        if (!state.unlimited) { state.unlimited = true; saveState(); renderWallet(); }
+        return true;
+      }
+      // The server is authoritative: if it says no, drop a locally forged flag.
+      if (state.unlimited) { state.unlimited = false; saveState(); renderWallet(); }
+      return false;
+    } catch {
+      return false;   // offline: keep whatever we had, do not unlock
+    }
+  }
+
+  // Stripe redirects back here after a successful payment. Unlocking waits on the webhook, so
+  // poll briefly rather than trusting the query string.
+  async function consumePaymentReturn() {
+    const params = new URLSearchParams(location.search);
+    const returned = params.get("paid") === "1" || params.get("redirect_status") === "succeeded";
+    if (!returned) return false;
+    history.replaceState(null, "", location.pathname);   // keep the URL shareable; do not re-trigger
+
+    for (let i = 0; i < 10; i++) {
+      if (await refreshEntitlement()) return true;
+      await new Promise((r) => setTimeout(r, 1200));     // webhook usually lands within a second or two
+    }
+    return false;
   }
 
   const defaultState = () => ({
@@ -524,15 +561,13 @@
   /* ---------- purchase + rewarded ad ---------- */
   function buy(kind) {
     if (kind === "unlimited") {
-      const link = STRIPE.unlimited;
-      if (!link) { setToast("Checkout is not configured yet.", "bad"); return; }
-      // Hand off to Stripe Checkout. It redirects back to /?paid=1 when the payment succeeds.
-      location.href = link;
+      // Off to Stripe Checkout with this browser's ref attached. Nothing unlocks until the
+      // webhook records the payment and /api/entitlement confirms it.
+      location.href = checkoutUrl();
       return;
     }
     if (kind === "hints") {
-      // No Payment Link wired up for the hint pack yet — keep it a local grant rather than
-      // pretending a purchase happened.
+      // No Payment Link for the hint pack yet — keep it a local grant rather than pretending.
       state.hints += 10;
       saveState();
       if (paywallEl.open) paywallEl.close();
@@ -613,12 +648,14 @@
   });
 
   loadPuzzles()
-    .then(() => {
-      const justPaid = consumePaymentReturn();
+    .then(async () => {
+      const justPaid = await consumePaymentReturn();
+      // A cached "unlimited" is only a UI hint; the server decides. Check once per launch.
+      const entitled = justPaid || (await refreshEntitlement());
       renderWallet();
       if (justPaid) {
         nextPuzzle();
-        setToast("Unlimited unlocked. Thank you.", "good");
+        setToast(entitled ? "Unlimited unlocked. Thank you." : "Payment received — still confirming.", "good");
         return;
       }
       // Opening the app is a free look, not a spent play: the first verse is granted by the daily
