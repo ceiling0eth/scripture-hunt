@@ -1,6 +1,0 @@
-# Cloudflare Pages config. Static assets only — no Worker, no functions, no backend.
-name = "scripture-hunt"
-pages_build_output_dir = "."
-
-# Deploy (after `wrangler login`):
-#   npx wrangler pages deploy . --project-name scripture-hunt
