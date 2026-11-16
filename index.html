@@ -142,29 +142,26 @@
 </dialog>
 
 <dialog id="paywall">
-  <h2>Out of free verses</h2>
-  <p class="sub">You've played <b id="pwCount">3</b> today. Come back tomorrow, watch a short ad, or go unlimited.</p>
+  <h2>That's 3 for today</h2>
+  <p class="sub">Nice hunting. Come back tomorrow for three more — or unlock the whole thing for good.</p>
 
   <div class="tier best">
-    <div class="t"><b>Unlimited <span class="tag">Best</span></b><span>$5.99</span></div>
-    <div class="d">Every verse, forever. No ads, no timer, no daily limit.</div>
-    <div class="btns"><button class="primary" id="buyBtn" data-buy="unlimited">Unlock forever — $5.99</button></div>
+    <div class="t"><b>Unlimited <span class="tag">One-time</span></b><span>$1.99</span></div>
+    <div class="d">Every verse, forever. No daily limit, no timer, no ads.</div>
+    <div class="btns"><button class="primary" id="buyBtn" data-buy="unlimited">Unlock everything — $1.99</button></div>
   </div>
 
   <div class="tier">
-    <div class="t"><b>Watch an ad</b><span>Free</span></div>
-    <div class="d">30 seconds, gives you 2 more verses today.</div>
+    <div class="t"><b>Watch a short ad</b><span>Free</span></div>
+    <div class="d">Gives you 2 more verses today.</div>
     <div class="btns"><button id="adBtn">Watch ad (+2 verses)</button></div>
   </div>
 
-  <div class="tier">
-    <div class="t"><b>Hint pack</b><span>$1.99</span></div>
-    <div class="d">10 hints. Reveals one word per hint, usable any time.</div>
-    <div class="btns"><button id="hintPackBtn" data-buy="hints">Buy 10 hints — $1.99</button></div>
-  </div>
-
   <button class="link" id="pwClose">Maybe later</button>
-  <p class="fine">Card payment handled by Stripe. Demo build: the hint pack and ad are simulated.</p>
+  <p class="fine">
+    Payment by Stripe. Your unlock is saved in this browser — if you clear site data or switch
+    devices, email the address on your Stripe receipt and I'll restore it.
+  </p>
 </dialog>
 
 <dialog id="ad">
@@ -199,7 +196,7 @@
   const STORE_KEY = "scripturehunt.v1";
 
   // Stripe Payment Link for the unlimited tier.
-  const STRIPE_UNLIMITED = "https://buy.stripe.com/00w00iaCBe1acCQdOB9IQ03";
+  const STRIPE_UNLIMITED = "https://buy.stripe.com/6oU28qaCB6yIbyM8uh9IQ04";
 
   // An opaque token tying a browser to a payment. Stripe echoes it back as client_reference_id,
   // the webhook records it, and /api/entitlement answers for it. A hand-edited URL unlocks
@@ -315,7 +312,6 @@
   }
 
   function openPaywall() {
-    $("pwCount").textContent = FREE_PER_DAY + state.bonus;
     if (!paywallEl.open) paywallEl.showModal();
   }
 
@@ -560,19 +556,10 @@
 
   /* ---------- purchase + rewarded ad ---------- */
   function buy(kind) {
-    if (kind === "unlimited") {
-      // Off to Stripe Checkout with this browser's ref attached. Nothing unlocks until the
-      // webhook records the payment and /api/entitlement confirms it.
-      location.href = checkoutUrl();
-      return;
-    }
-    if (kind === "hints") {
-      // No Payment Link for the hint pack yet — keep it a local grant rather than pretending.
-      state.hints += 10;
-      saveState();
-      if (paywallEl.open) paywallEl.close();
-      setToast("10 hints added.", "good");
-    }
+    if (kind !== "unlimited") return;
+    // Off to Stripe Checkout with this browser's ref attached. Nothing unlocks until the webhook
+    // records the payment and /api/entitlement confirms it.
+    location.href = checkoutUrl();
   }
 
   let adTick = 0;
@@ -630,7 +617,6 @@
   adEl.addEventListener("cancel", (e) => e.preventDefault());
 
   $("buyBtn").addEventListener("click", () => buy("unlimited"));
-  $("hintPackBtn").addEventListener("click", () => buy("hints"));
   $("adBtn").addEventListener("click", watchAd);
   $("pwClose").addEventListener("click", () => paywallEl.close());
 
