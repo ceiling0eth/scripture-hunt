@@ -6,7 +6,7 @@
  *
  * Bump CACHE when the shell changes in a way that must not survive a stale cache.
  */
-const CACHE = "scripture-hunt-v1";
+const CACHE = "scripture-hunt-v2";
 const SHELL = [
   "/",
   "/index.html",
@@ -42,6 +42,11 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;   // never intercept third-party (Stripe)
+
+  // The static verse pages under /v/ must be served exactly as published: they exist for search
+  // engines and carry their own title/description/canonical. Falling back to the app shell would
+  // silently replace them with a random-verse page and destroy what the crawler indexes.
+  if (url.pathname.startsWith("/v/")) return;
 
   // Navigations: try the network so a new deploy lands, fall back to the cached shell offline.
   if (req.mode === "navigate") {
