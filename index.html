@@ -14,7 +14,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Scripture Hunt">
-<meta name="description" content="Find the words hidden inside a King James verse.">
+<meta name="description" content="A free Bible word hunt. Find the words hidden inside a King James verse — 600 puzzles, no download, works offline.">
+<link rel="canonical" href="https://scripture-hunt.pages.dev/">
+<meta property="og:title" content="Scripture Hunt — Bible word hunt">
+<meta property="og:description" content="Find the words hidden inside a King James verse. 600 free puzzles, playable in the browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://scripture-hunt.pages.dev/">
 <style>
   :root{
     --bg:#12100e; --panel:#1c1917; --ink:#f5f1e8; --muted:#a8a29e;
@@ -598,9 +603,21 @@
     doneDlg.showModal();
   }
 
+  // The static verse pages link here with ?verse=<slug>, so someone who clicked a search result
+  // lands on exactly the verse they read about instead of a random one.
+  function puzzleFromUrl() {
+    const slug = new URLSearchParams(location.search).get("verse");
+    if (!slug) return null;
+    const norm = (r) => r.toLowerCase().replace(/:/g, "-").replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    return puzzles.find((p) => norm(p.ref) === slug) || null;
+  }
+
   // Returns false when the player is out of free verses (the caller shows the paywall).
   function nextPuzzle() {
-    const p = puzzles[Math.floor(Math.random() * puzzles.length)];
+    const wanted = puzzleFromUrl();
+    // Drop the query so a reload does not pin the same verse forever.
+    if (wanted) history.replaceState(null, "", location.pathname);
+    const p = wanted || puzzles[Math.floor(Math.random() * puzzles.length)];
     renderPuzzle(p);
     return true;
   }
@@ -646,6 +663,11 @@
       }
       // Opening the app is a free look, not a spent play: the first verse is granted by the daily
       // allowance, but a returning player with 0 left should land on the paywall immediately.
+      //
+      // An arrival from a verse page (?verse=<slug>) is the exception: that person came from a
+      // search result for this exact passage, so show it to them before asking for anything. The
+      // daily allowance still applies the next time they ask for a random verse.
+      if (puzzleFromUrl()) { nextPuzzle(); return; }
       if (!spendPlay()) { openPaywall(); return; }
       nextPuzzle();
     })
