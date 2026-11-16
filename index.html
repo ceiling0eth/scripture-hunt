@@ -144,12 +144,14 @@
   <p id="doneHints"></p>
   <div class="btns">
     <button class="primary" id="againBtn">Next verse</button>
+    <button id="shareBtn">Share</button>
   </div>
+  <p class="fine" id="shareNote"></p>
 </dialog>
 
 <dialog id="paywall">
-  <h2>That's 3 for today</h2>
-  <p class="sub">Nice hunting. Come back tomorrow for three more — or unlock the whole thing for good.</p>
+  <h2>That's 10 for today</h2>
+  <p class="sub">Nice hunting. Come back tomorrow for ten more — or unlock the whole thing for good.</p>
 
   <div class="tier best">
     <div class="t"><b>Unlimited <span class="tag">One-time</span></b><span>$1.99</span></div>
@@ -159,8 +161,8 @@
 
   <div class="tier">
     <div class="t"><b>Watch a short ad</b><span>Free</span></div>
-    <div class="d">Gives you 2 more verses today.</div>
-    <div class="btns"><button id="adBtn">Watch ad (+2 verses)</button></div>
+    <div class="d">Gives you 5 more verses today.</div>
+    <div class="btns"><button id="adBtn">Watch ad (+5 verses)</button></div>
   </div>
 
   <button class="link" id="pwClose">Maybe later</button>
@@ -195,8 +197,10 @@
   /* ---------- entitlements ----------
      Purchases are verified server-side: Stripe's webhook records the ref it was paid for, and the
      client asks /api/entitlement before unlocking. Locally cached state only mirrors the server. */
-  const FREE_PER_DAY = 3;
-  const AD_REWARD = 2;
+  // Ten, not three: three verses is not long enough to know whether you like the game, so a
+  // paywall at that point asks for money before there is any habit to pay for.
+  const FREE_PER_DAY = 10;
+  const AD_REWARD = 5;
   const AD_SECONDS = 5;                 // real build: 15-30s rewarded video
   const FREE_HINTS = 3;                 // starter hints before the hint pack is worth buying
   const STORE_KEY = "scripturehunt.v1";
@@ -637,6 +641,30 @@
   $("buyBtn").addEventListener("click", () => buy("unlimited"));
   $("adBtn").addEventListener("click", watchAd);
   $("pwClose").addEventListener("click", () => paywallEl.close());
+  $("shareBtn").addEventListener("click", shareVerse);
+
+  // Offer sharing at the one moment a player is happiest: right after finishing a verse.
+  // No account, no reward, nothing tracked — just an easy way to pass it on.
+  async function shareVerse() {
+    const note = $("shareNote");
+    const url = `${location.origin}/`;
+    const text = `I just finished ${puzzle ? puzzle.ref : "a verse"} in Scripture Hunt — find the words hidden in a Bible verse.`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Scripture Hunt", text, url });
+        note.textContent = "";
+        return;
+      }
+    } catch {
+      // user dismissed the sheet, or the platform refused: fall through to copying
+    }
+    try {
+      await navigator.clipboard.writeText(`${text} ${url}`);
+      note.textContent = "Link copied.";
+    } catch {
+      note.textContent = url;
+    }
+  }
 
   function playBlocked() {
     if (canPlay()) return false;
