@@ -1,0 +1,23 @@
+{
+  "name": "scripture-hunt",
+  "version": "1.0.0",
+  "description": "A Bible word-hunt game. A King James verse is shown with words hidden inside it — drag across a word to find it.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8765",
+    "build": "python3 tools/build_puzzles.py && python3 tools/build_verse_pages.py",
+    "check": "python3 tools/check_puzzles.py",
+    "test": "node tests/webhook.test.mjs && node tests/track.test.mjs && node tests/journey.test.mjs",
+    "test:unit": "node tests/webhook.test.mjs && node tests/track.test.mjs",
+    "test:journey": "node tests/journey.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ceiling0eth/scripture-hunt.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.65.1"
+  }
+}

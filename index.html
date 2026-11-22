@@ -241,17 +241,26 @@
   async function refreshEntitlement() {
     try {
       const res = await fetch(`/api/entitlement?ref=${encodeURIComponent(buyerRef())}`, { cache: "no-store" });
-      if (!res.ok) return false;
-      const data = await res.json();
-      if (data.unlimited === true) {
-        if (!state.unlimited) { state.unlimited = true; saveState(); renderWallet(); }
-        return true;
+      const data = res.ok ? await res.json() : null;
+
+      // The server is the only authority. A definite answer is applied in both directions; a
+      // failure to *reach* the server is treated as "not entitled" rather than "keep whatever the
+      // browser claims", because otherwise a 502 (or a local file server with no /api at all) is a
+      // free unlock for anyone who typed the flag into localStorage.
+      // Note the explicit `=== true` guard: `data && data.unlimited === true` evaluates to null
+      // when data is null, and storing null here leaves the flag neither set nor cleared.
+      const entitled = data !== null && data.unlimited === true;
+      if (entitled !== state.unlimited) {
+        state.unlimited = entitled;
+        saveState();
+        renderWallet();
       }
-      // The server is authoritative: if it says no, drop a locally forged flag.
+      return entitled;
+    } catch {
+      // Offline. Nothing to verify against, so nothing is granted; a genuine buyer just sees the
+      // paywall until the network is back, and their purchase is still recorded at Stripe.
       if (state.unlimited) { state.unlimited = false; saveState(); renderWallet(); }
       return false;
-    } catch {
-      return false;   // offline: keep whatever we had, do not unlock
     }
   }
 
