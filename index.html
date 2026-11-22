@@ -48,8 +48,15 @@
   #verse{
     font-size:19px; line-height:1.85; letter-spacing:.01em;
     -webkit-user-select:none; user-select:none; cursor:default;
+    /* Without this, a finger drag on a phone is interpreted as a page scroll: the browser fires
+       pointercancel and the selection dies, so dragging to find a word does nothing on mobile.
+       The verse is the drag surface, so panning it is disabled and the page scrolls around it. */
+    touch-action:none;
+    -webkit-touch-callout:none;
   }
-  #verse .w{border-radius:4px; transition:background .12s, color .12s; padding:1px 0}
+  /* Generous hit area: a fingertip is ~9mm and these are 4-8 letter words at 19px. The vertical
+     padding widens the touch target without changing where the text sits. */
+  #verse .w{border-radius:4px; transition:background .12s, color .12s; padding:6px 1px; margin:-6px 0}
   #verse .w.pick{background:var(--gold); color:#12100e}
   #verse .w.found{background:var(--found); color:var(--found-ink); text-decoration:line-through; text-decoration-thickness:1px}
   #verse .w.found.pick{background:var(--gold); color:#12100e}
@@ -548,27 +555,36 @@
     const i = wordAt(e.target);
     if (i < 0) return;
     dragging = true;
-    verseEl.setPointerCapture?.(e.pointerId);
+    // Capture so the drag keeps being delivered even if the finger slides off the span it started
+    // on — on a phone that is the common case, not the exception.
+    try { verseEl.setPointerCapture(e.pointerId); } catch { /* older Safari */ }
     onWordDown(i);
     e.preventDefault();
   });
 
   verseEl.addEventListener("pointermove", (e) => {
     if (!dragging) return;
+    // While captured, every move retargets to the capturing element, so ask the document what is
+    // actually under the finger instead of trusting e.target.
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    const i = wordAt(el);
+    const i = wordAt(el || e.target);
     if (i >= 0) onWordEnter(i);
   });
 
   verseEl.addEventListener("pointerup", (e) => {
     if (!dragging) return;
     dragging = false;
-    verseEl.releasePointerCapture?.(e.pointerId);
-    // If nothing was committed, it was a single tap on a hidden word -> treat as a full-word pick.
+    try { verseEl.releasePointerCapture(e.pointerId); } catch { /* older Safari */ }
     tryCommit();
   });
 
-  verseEl.addEventListener("pointercancel", () => { dragging = false; clearPick(); });
+  // pointercancel means the browser took the gesture away (scroll, system gesture, call).
+  // Commit what the player had selected rather than silently throwing it away.
+  verseEl.addEventListener("pointercancel", () => {
+    if (dragging) tryCommit();
+    dragging = false;
+    clearPick();
+  });
 
   /* ---------- hints ---------- */
   function useHint() {
