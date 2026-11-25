@@ -132,6 +132,78 @@ def build_sitemap(puzzles):
     )
 
 
+def build_index(puzzles):
+    """A single crawlable page listing every verse, grouped by book.
+
+    The sitemap was submitted to Google on 2026-11-16 and never read: eight days later the
+    property still reported "could not fetch" and the verse pages reported "no referring sitemap
+    detected". A live fetch test proved the file itself is fine, so the crawl has to come from
+    links instead: the homepage links here, this page links to all 600 verses, and each verse links
+    to its neighbours. That path does not depend on the sitemap being processed at all.
+    """
+    groups = {}
+    for p in puzzles:
+        # "1 Chronicles 15:28" -> book "1 Chronicles"; "Psalms 23:1" -> "Psalms"
+        book = re.sub(r"\s+\d+:\d+$", "", p["ref"])
+        groups.setdefault(book, []).append(p)
+
+    def book_key(name):
+        m = re.match(r"^(\d?)\s*(.*)$", name)
+        return (int(m.group(1)) if m.group(1) else 99, m.group(2))
+
+    sections = []
+    for book in sorted(groups, key=book_key):
+        items = "".join(
+            f'<li><a href="/v/{slugify(p["ref"])}/">{html.escape(p["ref"])}</a></li>'
+            for p in groups[book]
+        )
+        sections.append(
+            f'<section><h2>{html.escape(book)} <span class="n">{len(groups[book])}</span></h2>'
+            f"<ul>{items}</ul></section>"
+        )
+
+    title = f"All {len(puzzles)} Bible word-hunt verses — Scripture Hunt"
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(title)}</title>
+<meta name="description" content="Every Bible verse in Scripture Hunt, grouped by book. Pick a passage and find the words hidden inside it.">
+<link rel="canonical" href="{SITE}/verses/">
+<meta name="theme-color" content="#12100e">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<style>
+  :root{{--bg:#12100e;--panel:#1c1917;--ink:#f5f1e8;--muted:#a8a29e;--gold:#d4a94e;--gold-dim:#8a6d33;--line:#3f3a35;}}
+  *{{box-sizing:border-box}}
+  body{{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;line-height:1.6;
+    padding:24px 16px calc(24px + env(safe-area-inset-bottom));}}
+  .wrap{{max-width:820px;margin:0 auto}}
+  h1{{font-size:19px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin:0 0 4px}}
+  .note{{color:var(--muted);font-size:14px;margin:0 0 24px}}
+  a{{color:var(--ink);text-decoration:none}} a:hover{{color:var(--gold);text-decoration:underline}}
+  .home{{color:var(--gold);display:inline-block;margin-bottom:20px;font-size:14px}}
+  section{{border-top:1px solid var(--line);padding:14px 0}}
+  h2{{font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold-dim);
+     margin:0 0 10px;font-weight:600}}
+  h2 .n{{color:var(--muted);font-weight:400;letter-spacing:0}}
+  ul{{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px 16px}}
+  li{{font-size:15px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="home" href="/">&larr; Play Scripture Hunt</a>
+  <h1>All verses</h1>
+  <p class="note">{len(puzzles)} passages, grouped by book. Pick one and find the words hidden inside it.</p>
+  {"".join(sections)}
+</div>
+</body>
+</html>
+"""
+
+
 def main():
     puzzles = load()
     if os.path.isdir(OUT):
@@ -146,6 +218,12 @@ def main():
         with open(os.path.join(d, "index.html"), "w", encoding="utf-8") as f:
             f.write(page_html(p, prev_p, next_p, i))
 
+    # The crawl path that does not depend on the sitemap.
+    idx = os.path.join(ROOT, "verses")
+    os.makedirs(idx, exist_ok=True)
+    with open(os.path.join(idx, "index.html"), "w", encoding="utf-8") as f:
+        f.write(build_index(puzzles))
+
     with open(os.path.join(ROOT, "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write(build_sitemap(puzzles))
 
@@ -153,6 +231,7 @@ def main():
         f.write(f"User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\n")
 
     print(f"generated {len(puzzles)} verse pages in v/")
+    print("generated verses/index.html (crawl entry point)")
     print(f"sitemap.xml with {len(puzzles) + 1} urls")
 
 

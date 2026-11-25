@@ -119,6 +119,9 @@
   #ad .adbox{background:#0d0c0b; border:1px solid var(--line); border-radius:8px; padding:34px 16px;
              margin:16px 0; color:var(--muted); font-size:13px; letter-spacing:.16em; text-transform:uppercase}
   #adTimer{font-size:32px; color:var(--gold); font-variant-numeric:tabular-nums; margin:10px 0}
+  .browse{margin-top:14px; text-align:center; font-size:13px}
+  .browse a{color:var(--gold-dim); text-decoration:none}
+  .browse a:hover{color:var(--gold); text-decoration:underline}
 </style>
 <!-- Cloudflare Web Analytics: page views only, no cookies, no fingerprinting. -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b29a9a76939841ae946c68d753b95204"}'></script>
@@ -144,6 +147,12 @@
     </div>
     <div id="toast"></div>
   </div>
+
+  <!-- Crawl path: the homepage links to /verses/, which links every passage. Google has the
+       homepage indexed but never read the submitted sitemap, so discovery has to come from links. -->
+  <nav class="browse">
+    <a href="/verses/">Browse all 600 verses &rarr;</a>
+  </nav>
 </div>
 
 <dialog id="done">
