@@ -3,7 +3,8 @@
 A Bible word-hunt game. A King James verse is shown with 5-8 words hidden inside it — drag across
 a word to find it.
 
-**Live:** <https://scripture-hunt.pages.dev>
+**Live:** <https://scripturehunt.com>
+**Old host:** <https://scripture-hunt.pages.dev> redirects to the domain above.
 **Local:** `./start.sh`, then open <http://127.0.0.1:8765>. Opening `index.html` via `file://` will
 not work (the browser blocks the puzzle fetch, and `/api/*` only exists on Cloudflare).
 
@@ -48,7 +49,7 @@ per day (currently unbilled) and keeps data for three months. Do that only when 
 **Check the counters without opening a dashboard:**
 
 ```bash
-curl https://scripture-hunt.pages.dev/api/track
+curl https://scripturehunt.com/api/track
 # {"day":"2026-11-17","started":12,"finished":7,"paywall":3,"shared":1}
 ```
 
@@ -234,6 +235,42 @@ The project needs two things configured in the Cloudflare Dashboard, not in this
 | Secret | `STRIPE_WEBHOOK_SECRET` | the `whsec_...` from the Stripe webhook endpoint |
 
 Changing either requires a redeploy to take effect.
+
+After changing `SITE` in `tools/build_verse_pages.py`, regenerate everything:
+`python3 tools/build_verse_pages.py`.
+
+## Domain
+
+`scripturehunt.com` (registered 2026-11-25, $11.17/year, Cloudflare Registrar at cost).
+
+**Why it is not just vanity.** The site lived on `scripture-hunt.pages.dev` for eight days and
+Google indexed exactly one page while the sitemap sat in "could not fetch" and every verse page
+reported "no referring sitemap detected" — even though a live fetch test proved the sitemap itself
+returned 200 with 601 valid URLs. Google's own Product Expert explains it: `pages.dev` is a shared
+namespace, crawl budget is allocated per host, and a fresh unrelated subdomain inside it gets a
+small share. `site:pages.dev bible` shows plenty of indexed sites there, so it is congestion rather
+than a block. $11 buys an exclusive crawl budget.
+
+The old hostname still serves the deployment. Pages carry an inline script that moves a visitor
+from the `*.pages.dev` host to the domain, and `canonical` already points at the domain, so the two
+hosts never compete in the index. Cloudflare Pages cannot match on hostname in `_redirects`, which
+is why it is a script.
+
+## Search engine submission
+
+| Engine | How | State |
+|---|---|---|
+| Google | Search Console, property verified, sitemap submitted | live fetch test passes |
+| **Bing, Yandex, Seznam, Naver** | **IndexNow** (`tools/indexnow.py`) | 601 URLs accepted |
+
+IndexNow needs no account: publish the key file at the site root (already in the repo), then POST
+the URL list. `python3 tools/indexnow.py` submits the entry points, `--all` submits every URL in
+the sitemap. This is the only submission path that works without a Webmaster Tools login.
+
+**The sitemap is submitted but has never been read by Google.** Eight days of "could not fetch"
+with a provably valid file is why the site now also relies on ordinary links: the homepage links to
+`/verses/`, which links all 600 passages, and each passage links to its neighbours. That path does
+not depend on the sitemap at all.
 
 ## Why this exists
 
