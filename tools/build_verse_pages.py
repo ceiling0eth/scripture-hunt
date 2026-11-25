@@ -12,9 +12,18 @@ import json, os, re, html, shutil, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 OUT = os.path.join(ROOT, "v")
-SITE = "https://scripture-hunt.pages.dev"
+SITE = "https://scripturehunt.com"
 
 # Book name -> the same book with hyphens for the slug / URL.
+# Sent on every generated page. A visitor who lands on the old *.pages.dev hostname is moved to
+# the canonical domain so both hosts never compete in the index. Kept inline and tiny: no extra
+# request, and the canonical link above still tells a crawler the right answer without running JS.
+REDIRECT = (
+    '<script>(function(){if(location.hostname==="scripture-hunt.pages.dev"){'
+    'location.replace("https://scripturehunt.com"+location.pathname+location.search);}})();</script>'
+)
+
+
 def slugify(ref):
     s = ref.lower().replace(":", "-").replace(" ", "-")
     return re.sub(r"[^a-z0-9-]", "", s)
@@ -58,7 +67,7 @@ def page_html(p, prev_p, next_p, index):
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{html.escape(title)}</title>
 <meta name="description" content="{html.escape(desc)}">
-<link rel="canonical" href="{SITE}/v/{slugify(ref)}/">
+<link rel="canonical" href="{SITE}/v/{slugify(ref)}/">\n{REDIRECT}
 <meta name="theme-color" content="#12100e">
 <meta property="og:title" content="{html.escape(ref)} — Scripture Hunt">
 <meta property="og:description" content="{html.escape(desc)}">
@@ -170,7 +179,7 @@ def build_index(puzzles):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
 <meta name="description" content="Every Bible verse in Scripture Hunt, grouped by book. Pick a passage and find the words hidden inside it.">
-<link rel="canonical" href="{SITE}/verses/">
+<link rel="canonical" href="{SITE}/verses/">\n{REDIRECT}
 <meta name="theme-color" content="#12100e">
 <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
 <style>
