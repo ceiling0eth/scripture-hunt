@@ -111,6 +111,19 @@ await test("a stranger sees a playable verse immediately", async () => {
   } finally { await ctx.close(); }
 });
 
+await test("a stranger is told what to do, and the hint goes away once they have", async () => {
+  const { ctx, page } = await freshPage();
+  try {
+    const hint = page.locator("#goal");
+    assert.equal(await hint.isVisible(), true, "a first-time visitor must be told the goal");
+    assert.match(await hint.textContent(), /drag across a word/i, "the instruction must name the gesture");
+
+    await solve(page);
+    await page.waitForTimeout(300);
+    assert.equal(await hint.isVisible(), false, "the hint should not linger after the first find");
+  } finally { await ctx.close(); }
+});
+
 await test("a wrong word gives feedback and does not score", async () => {
   const { ctx, page } = await freshPage();
   try {

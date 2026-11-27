@@ -46,6 +46,11 @@
   .meta{font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
   .panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px}
   .ref{font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--gold-dim); margin-bottom:10px}
+  /* First thing a new visitor needs: what the game is. Hidden after the first word is found. */
+  .goal{font-size:13px; line-height:1.6; color:var(--muted); margin:0 0 12px; padding:9px 11px;
+    border-left:2px solid var(--gold-dim); background:rgba(212,169,78,.06); border-radius:0 6px 6px 0}
+  .goal b{color:var(--gold); font-weight:600}
+  .goal[hidden]{display:none}
   #verse{
     font-size:19px; line-height:1.85; letter-spacing:.01em;
     -webkit-user-select:none; user-select:none; cursor:default;
@@ -141,6 +146,8 @@
 
   <div class="panel">
     <div class="ref" id="ref">&nbsp;</div>
+    <p class="goal" id="goal"><b>Find the hidden words.</b> 5–8 words in this verse are missing —
+      drag across a word to guess it. Get them all to finish.</p>
     <div id="verse">Loading…</div>
     <div class="bar">
       <div class="prog"><i id="progFill"></i></div>
@@ -546,6 +553,8 @@
     updateProgress();
     clearPick();
     setToast(`“${hit.word}” — found.`, "good");
+    // They proved they know how to play; stop explaining.
+    document.getElementById("goal").hidden = true;
 
     if (found === puzzle.words.length) finish();
   }
